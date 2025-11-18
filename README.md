@@ -56,7 +56,7 @@ O script de inicialização (`startup.sh` ou `startup.ps1`) realiza as seguintes
    - `dr-ocp-identity-manager` (se não existir)
    - `dr-ocp-admin-fe` (se não existir)
    - `dr-ocp-admin-be` (se não existir)
-3. **Navega para a pasta `./setup`**: Onde estão os arquivos de configuração do Docker Compose
+3. **Navega para a pasta `./dr-ocp-setup`**: Onde estão os arquivos de configuração do Docker Compose
 4. **Executa o script de inicialização local**: 
    - Windows: `run-locally.ps1`
    - Linux/Mac: `run-locally.sh`
@@ -90,6 +90,12 @@ dr-ocp-workstation-toolkit/
 ```
 
 ## Comandos Úteis
+
+Esteja certo que está na pasta `dr-ocp-setup` antes de executar os comandos:
+
+```bash
+cd ./dr-ocp-setup
+```
 
 ### Ver logs dos serviços
 
@@ -136,7 +142,7 @@ docker compose up -d [nome-do-servico]
 
 ### Portas já em uso
 
-Se alguma porta já estiver em uso, você pode alterar as variáveis de ambiente no arquivo `setup/docker-compose.yaml` ou criar um arquivo `.env` na pasta `setup/`.
+Se alguma porta já estiver em uso, você pode alterar as variáveis de ambiente no arquivo `dr-ocp-setup/docker-compose.yaml` ou criar um arquivo `.env` na pasta `dr-ocp-setup/`.
 
 ## Contribuindo
 
