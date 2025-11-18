@@ -1,0 +1,146 @@
+services:
+
+  mssql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dr-ocupacional-mssql-server
+    environment:
+      SA_PASSWORD: ${SA_PASSWORD:-Password123!}
+      ACCEPT_EULA: Y
+    healthcheck:
+        test: /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$SA_PASSWORD" -Q "SELECT 1" || exit 1
+        interval: 10s
+        timeout: 3s
+        retries: 10
+        start_period: 10s
+    ports:
+      - "${MSSQL_SERVER_PORT:-1433}:1433"
+    volumes:
+      - mssql-data:/var/lib/mssql
+    networks:
+      - dr-ocupacional-network
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dr-ocupacional-mssql-init
+    environment:
+      SA_PASSWORD: ${SA_PASSWORD:-Password123!}
+      ACCEPT_EULA: Y
+    volumes:
+      - ../apps/dr-ocp-admin-be/sql-init/init.sql:/init.sql:ro
+    command: >
+      /bin/bash -c "
+      echo 'Aguardando MSSQL Server ficar disponível...' &&
+      until /opt/mssql-tools18/bin/sqlcmd -C -S mssql-server -U sa -P \"$$SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null 2>&1; do
+        echo 'MSSQL Server ainda não está pronto. Aguardando...' &&
+        sleep 2
+      done &&
+      echo 'MSSQL Server está pronto. Executando script de inicialização...' &&
+      /opt/mssql-tools18/bin/sqlcmd -C -S mssql-server -U sa -P \"$$SA_PASSWORD\" -i /init.sql -b &&
+      echo 'Script de inicialização executado com sucesso!'
+      "
+    depends_on:
+      mssql-server:
+        condition: service_healthy
+    networks:
+      - dr-ocupacional-network
+    restart: "no"
+
+  postgres-identity:
+    image: postgres:16-alpine
+    container_name: dr-ocupacional-postgres-identity
+    environment:
+      POSTGRES_DB: ${POSTGRES_IDENTITY_DB:-dr_ocupacional_identity}
+      POSTGRES_USER: ${POSTGRES_IDENTITY_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_IDENTITY_PASSWORD:-postgres123}
+    ports:
+      - "${POSTGRES_IDENTITY_PORT:-5433}:5432"
+    volumes:
+      - postgres-identity-data:/var/lib/postgresql/data
+      - ../apps/dr-ocp-identity-manager/sql-init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_IDENTITY_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dr-ocupacional-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dr-ocp-admin-be:
+    build:
+      context: ../apps/dr-ocp-admin-be
+      dockerfile: Dockerfile
+    container_name: dr-ocupacional-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Server=mssql-server,1433;Database=dr_ocupacional;User Id=sa;Password=${SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
+      ConnectionStrings__Redis: "redis:6379"
+      Identity__Authority: "http://identity:8081"
+      Identity__Audience: "ui-app"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      mssql-server:
+        condition: service_healthy
+      mssql-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      # dr-ocp-identity-manager:
+      #   condition: service_started
+    networks:
+      - dr-ocupacional-network
+
+  # dr-ocp-identity-manager:
+  #   build:
+  #     context: ../apps/dr-ocp-identity-manager
+  #     dockerfile: Dockerfile
+  #   container_name: dr-ocupacional-identity
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+  #     ASPNETCORE_URLS: http://+:8081
+  #     ConnectionStrings__DefaultConnection: "Host=postgres-identity;Port=5432;Database=${POSTGRES_IDENTITY_DB:-dr_ocupacional_identity};Username=${POSTGRES_IDENTITY_USER:-postgres};Password=${POSTGRES_IDENTITY_PASSWORD:-postgres123}"
+  #   ports:
+  #     - "${IDENTITY_PORT:-8081}:8081"
+  #   depends_on:
+  #     postgres-identity:
+  #       condition: service_healthy
+  #   networks:
+  #     - dr-ocupacional-network
+
+  dr-ocp-admin-fe:
+    build:
+      context: ../apps/dr-ocp-admin-fe
+      dockerfile: Dockerfile
+    container_name: dr-ocupacional-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      NEXT_PUBLIC_IDENTITY_URL: ${NEXT_PUBLIC_IDENTITY_URL:-http://localhost:8081}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - dr-ocp-admin-be
+      # - dr-ocp-identity-manager
+    networks:
+      - dr-ocupacional-network
+
+networks:
+  dr-ocupacional-network:
+    driver: bridge
+
+volumes:
+  mssql-data:
+  postgres-identity-data:
+  redis-data:
+
