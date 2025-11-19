@@ -62,6 +62,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - dr-ocupacional-network
 
   redis:
     image: redis:7-alpine
@@ -75,6 +78,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dr-ocupacional-network
 
   dr-ocp-admin-be:
     build:
@@ -86,7 +91,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Server=mssql-server,1433;Database=dr_ocupacional;User Id=sa;Password=${SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
       ConnectionStrings__Redis: "redis:6379"
-      Identity__Authority: "http://identity:8081"
+      Identity__Authority: "http://dr-ocp-identity-manager:8081"
       Identity__Audience: "ui-app"
     ports:
       - "${BACKEND_PORT:-8080}:8080"
@@ -97,27 +102,27 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      # dr-ocp-identity-manager:
-      #   condition: service_started
+      dr-ocp-identity-manager:
+        condition: service_started
     networks:
       - dr-ocupacional-network
 
-  # dr-ocp-identity-manager:
-  #   build:
-  #     context: ../apps/dr-ocp-identity-manager
-  #     dockerfile: Dockerfile
-  #   container_name: dr-ocupacional-identity
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
-  #     ASPNETCORE_URLS: http://+:8081
-  #     ConnectionStrings__DefaultConnection: "Host=postgres-identity;Port=5432;Database=${POSTGRES_IDENTITY_DB:-dr_ocupacional_identity};Username=${POSTGRES_IDENTITY_USER:-postgres};Password=${POSTGRES_IDENTITY_PASSWORD:-postgres123}"
-  #   ports:
-  #     - "${IDENTITY_PORT:-8081}:8081"
-  #   depends_on:
-  #     postgres-identity:
-  #       condition: service_healthy
-  #   networks:
-  #     - dr-ocupacional-network
+  dr-ocp-identity-manager:
+    build:
+      context: ../apps/dr-ocp-identity-manager
+      dockerfile: Dockerfile
+    container_name: dr-ocupacional-identity
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8081
+      ConnectionStrings__DefaultConnection: "Host=postgres-identity;Port=5432;Database=${POSTGRES_IDENTITY_DB:-dr_ocupacional_identity};Username=${POSTGRES_IDENTITY_USER:-postgres};Password=${POSTGRES_IDENTITY_PASSWORD:-postgres123}"
+    ports:
+      - "${IDENTITY_PORT:-8081}:8081"
+    depends_on:
+      postgres-identity:
+        condition: service_healthy
+    networks:
+      - dr-ocupacional-network
 
   dr-ocp-admin-fe:
     build:
@@ -131,7 +136,7 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - dr-ocp-admin-be
-      # - dr-ocp-identity-manager
+      - dr-ocp-identity-manager
     networks:
       - dr-ocupacional-network
 
