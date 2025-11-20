@@ -66,21 +66,6 @@ services:
     networks:
       - dr-ocupacional-network
 
-  redis:
-    image: redis:7-alpine
-    container_name: dr-ocupacional-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - dr-ocupacional-network
-
   dr-ocp-admin-be:
     build:
       context: ../apps/dr-ocp-admin-be
@@ -90,7 +75,6 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Server=mssql-server,1433;Database=dr_ocupacional;User Id=sa;Password=${SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
-      ConnectionStrings__Redis: "redis:6379"
       Identity__Authority: "http://dr-ocp-identity-manager:8081"
       Identity__Audience: "ui-app"
     ports:
@@ -100,8 +84,6 @@ services:
         condition: service_healthy
       mssql-init:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
       dr-ocp-identity-manager:
         condition: service_started
     networks:
@@ -147,5 +129,4 @@ networks:
 volumes:
   mssql-data:
   postgres-identity-data:
-  redis-data:
 
